@@ -53,6 +53,7 @@ public abstract class AbstractResourceFinder {
 
     // This has the xml tag mapping for each artifact type
     private static final Map<String, String> typeToXmlTagMap = new HashMap<>();
+    protected Map<String, ResourceResponse> dependentResourcesMap = new HashMap<>();
 
     static {
 
@@ -76,6 +77,92 @@ public abstract class AbstractResourceFinder {
         typeToXmlTagMap.put("xslt", "xsl:stylesheet");
         typeToXmlTagMap.put("xsd", "xs:schema");
         typeToXmlTagMap.put("wsdl", "wsdl:definitions");
+    }
+
+    public void initDependentResourcesMap() {
+        dependentResourcesMap.put("endpoint", new ResourceResponse());
+        dependentResourcesMap.put("sequence", new ResourceResponse());
+        dependentResourcesMap.put("messageStore", new ResourceResponse());
+        dependentResourcesMap.put("messageProcessor", new ResourceResponse());
+        dependentResourcesMap.put("endpointTemplate", new ResourceResponse());
+        dependentResourcesMap.put("sequenceTemplate", new ResourceResponse());
+        dependentResourcesMap.put("localEntry", new ResourceResponse());
+        dependentResourcesMap.put("inbound-endpoint", new ResourceResponse());
+        dependentResourcesMap.put("dataService", new ResourceResponse());
+        dependentResourcesMap.put("dataSource", new ResourceResponse());
+        dependentResourcesMap.put("ws_policy", new ResourceResponse());
+        dependentResourcesMap.put("smooksConfig", new ResourceResponse());
+        dependentResourcesMap.put("xsl", new ResourceResponse());
+        dependentResourcesMap.put("xslt", new ResourceResponse());
+        dependentResourcesMap.put("xsd", new ResourceResponse());
+        dependentResourcesMap.put("wsdl", new ResourceResponse());
+    }
+
+    public void loadDependentResources(String projectPath) {
+
+        initDependentResourcesMap();
+        String projectName = Path.of(projectPath).getFileName().toString();
+        Path dependenciesTempDir = Path.of(System.getProperty("user.home"), ".wso2-mi", "dependencies");
+        Path projectDependencyDir = null;
+
+        try {
+            projectDependencyDir = java.nio.file.Files.list(dependenciesTempDir)
+                    .filter(path -> path.getFileName().toString().startsWith(projectName) && java.nio.file.Files.isDirectory(path))
+                    .findFirst()
+                    .orElse(null);
+            if (projectDependencyDir != null) {
+                Path extractedDir = projectDependencyDir.resolve("Extracted");
+                if (java.nio.file.Files.exists(extractedDir) && java.nio.file.Files.isDirectory(extractedDir)) {
+                    Map<String, ResourceResponse> dependentResourcesMap = getDependentResourcesMap();
+                    for (Path dependentProject : java.nio.file.Files.list(extractedDir).toArray(Path[]::new)) {
+                        if (java.nio.file.Files.isDirectory(dependentProject)) {
+                            for (Map.Entry<String, ResourceResponse> entry : dependentResourcesMap.entrySet()) {
+                                String type = entry.getKey();
+                                ResourceResponse dependentResources = entry.getValue();
+
+                                RequestedResource requestedResource = new RequestedResource(type, true);
+                                ResourceResponse resources =
+                                        findResources(dependentProject.toString(), List.of(requestedResource));
+                                mergeResourceResponses(dependentResources, resources);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Map<String, ResourceResponse> getDependentResourcesMap() {
+
+        return dependentResourcesMap;
+    }
+
+    protected void mergeResourceResponses(ResourceResponse response1, ResourceResponse response2) {
+
+        if (response1 != null && response2 != null) {
+            List<Resource> resources = response1.getResources();
+            if (resources == null) {
+                resources = new ArrayList<>();
+            }
+            if (response2.getResources() != null) {
+                resources.addAll(response2.getResources());
+            }
+            response1.setResources(resources);
+            List<Resource> registryResources = response1.getRegistryResources();
+            if (registryResources == null) {
+                registryResources = new ArrayList<>();
+            }
+            if (response2.getRegistryResources() != null) {
+                registryResources.addAll(response2.getRegistryResources());
+            }
+            response1.setRegistryResources(registryResources);
+        } else if (response1 == null) {
+            response1 = new ResourceResponse();
+            response1.setResources(response2.getResources());
+            response1.setRegistryResources(response2.getRegistryResources());
+        }
     }
 
     public ResourceResponse getAvailableResources(String uri, Either<String, List<RequestedResource>> resourceTypes) {

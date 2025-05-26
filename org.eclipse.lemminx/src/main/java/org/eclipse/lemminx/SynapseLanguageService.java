@@ -659,9 +659,15 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<String> updateConnectorDependencies() {
-        String statusMessage = ConnectorDownloadManager.downloadConnectors(projectUri);
+        String statusMessage = ConnectorDownloadManager.downloadDependencies(projectUri);
         updateConnectors();
         return CompletableFuture.supplyAsync(() -> statusMessage);
+    }
+
+    @Override
+    public CompletableFuture<String> loadDependentResources() {
+        resourceFinder.loadDependentResources(projectUri);
+        return CompletableFuture.supplyAsync(() -> "Dependent resources loaded successfully.");
     }
 
     @Override

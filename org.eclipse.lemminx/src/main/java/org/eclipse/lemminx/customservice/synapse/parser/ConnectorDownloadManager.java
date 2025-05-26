@@ -47,6 +47,73 @@ public class ConnectorDownloadManager {
 
     private static final Logger LOGGER = Logger.getLogger(ConnectorDownloadManager.class.getName());
 
+    public static String downloadDependencies(String projectPath) {
+
+        OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
+        getPomDetails(projectPath, pomDetailsResponse);
+        List<DependencyDetails> connectorDependencies = pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
+        List<DependencyDetails> otherDependencies = pomDetailsResponse.getDependenciesDetails().getOtherDependencies();
+        List<String> failedConnectorDependencies = handleConnectorDependencies(projectPath, connectorDependencies);
+        List<String> failedOtherDependencies = handleOtherDependencies(projectPath, otherDependencies);
+        if (!failedConnectorDependencies.isEmpty()) {
+            LOGGER.log(Level.SEVERE, "Some connectors were not downloaded: " + String.join(", ", failedConnectorDependencies));
+            return "Some connectors were not downloaded: " + String.join(", ", failedConnectorDependencies);
+        }
+        if (!failedOtherDependencies.isEmpty()) {
+            LOGGER.log(Level.SEVERE, "Some other dependencies were not downloaded: " + String.join(", ", failedOtherDependencies));
+            return "Some other dependencies were not downloaded: " + String.join(", ", failedOtherDependencies);
+        }
+        return "Success";
+    }
+
+    public static List<String> handleConnectorDependencies(String projectPath, List<DependencyDetails> dependencies) {
+
+        String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
+        File directory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI, Constant.CONNECTORS,
+                projectId).toFile();
+        File downloadDirectory = Path.of(directory.getAbsolutePath(), Constant.DOWNLOADED).toFile();
+        File extractDirectory = Path.of(directory.getAbsolutePath(), Constant.EXTRACTED).toFile();
+
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        if (!extractDirectory.exists()) {
+            extractDirectory.mkdirs();
+        }
+        if (!downloadDirectory.exists()) {
+            downloadDirectory.mkdirs();
+        }
+
+        deleteRemovedConnectors(downloadDirectory, dependencies, projectPath);
+        List<String> failedDependencies = new ArrayList<>();
+
+        for (DependencyDetails dependency : dependencies) {
+            try {
+                File dependencyFile = Path.of(downloadDirectory.getAbsolutePath(),
+                        dependency.getArtifact() + "-" + dependency.getVersion() + "." + dependency.getType()).toFile();
+                if (dependencyFile.exists() && dependencyFile.isFile()) {
+                    LOGGER.log(Level.INFO, "Dependency already downloaded: " + dependencyFile.getName());
+                } else {
+                    File existingArtifact = getDependencyFromLocalRepo(dependency.getGroupId(),
+                            dependency.getArtifact(), dependency.getVersion(), dependency.getType());
+                    if (existingArtifact != null) {
+                        LOGGER.log(Level.INFO, "Copying dependency from local repository: " + dependencyFile.getName());
+                        copyFile(existingArtifact, downloadDirectory);
+                    } else {
+                        LOGGER.log(Level.INFO, "Downloading dependency: " + dependencyFile.getName());
+                        Utils.downloadConnector(dependency.getGroupId(), dependency.getArtifact(),
+                                dependency.getVersion(), downloadDirectory, Constant.ZIP_EXTENSION_NO_DOT);
+                    }
+                }
+            } catch (Exception e) {
+                String failedDependency = dependency.getGroupId() + "-" + dependency.getArtifact() + "-" + dependency.getVersion();
+                LOGGER.log(Level.WARNING, "Error occurred while downloading dependency " + failedDependency + ": " + e.getMessage());
+                failedDependencies.add(failedDependency);
+            }
+        }
+        return failedDependencies;
+    }
+
     public static String downloadConnectors(String projectPath) {
 
         String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
@@ -67,22 +134,27 @@ public class ConnectorDownloadManager {
 
         OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
         getPomDetails(projectPath, pomDetailsResponse);
-        List<DependencyDetails> dependencies = pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
-        deleteRemovedConnectors(downloadDirectory, dependencies, projectPath);
+        List<DependencyDetails> connectorDependencies = pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
+        List<DependencyDetails> otherDependencies = pomDetailsResponse.getDependenciesDetails().getOtherDependencies();
+        deleteRemovedConnectors(downloadDirectory, connectorDependencies, projectPath);
         List<String> failedDependencies = new ArrayList<>();
+
+        List<DependencyDetails> dependencies = new ArrayList<>();
+        dependencies.addAll(connectorDependencies);
+        dependencies.addAll(otherDependencies);
         for (DependencyDetails dependency : dependencies) {
             try {
-                File connector = Path.of(downloadDirectory.getAbsolutePath(),
-                        dependency.getArtifact() + "-" + dependency.getVersion() + Constant.ZIP_EXTENSION).toFile();
+                File dependencyFile = Path.of(downloadDirectory.getAbsolutePath(),
+                        dependency.getArtifact() + "-" + dependency.getVersion() + "." + dependency.getType()).toFile();
                 File existingArtifact = null;
-                if (connector.exists() && connector.isFile()) {
-                    LOGGER.log(Level.INFO, "Dependency already downloaded: " + connector.getName());
+                if (dependencyFile.exists() && dependencyFile.isFile()) {
+                    LOGGER.log(Level.INFO, "Dependency already downloaded: " + dependencyFile.getName());
                 } else if ((existingArtifact = getDependencyFromLocalRepo(dependency.getGroupId(),
-                        dependency.getArtifact(), dependency.getVersion())) != null ) {
-                    LOGGER.log(Level.INFO, "Copying dependency from local repository: " + connector.getName());
+                        dependency.getArtifact(), dependency.getVersion(), dependency.getType())) != null ) {
+                    LOGGER.log(Level.INFO, "Copying dependency from local repository: " + dependencyFile.getName());
                     copyFile(existingArtifact, downloadDirectory);
                 } else {
-                    LOGGER.log(Level.INFO, "Downloading dependency: " + connector.getName());
+                    LOGGER.log(Level.INFO, "Downloading dependency: " + dependencyFile.getName());
                     Utils.downloadConnector(dependency.getGroupId(), dependency.getArtifact(),
                             dependency.getVersion(), downloadDirectory, Constant.ZIP_EXTENSION_NO_DOT);
                 }
@@ -97,6 +169,74 @@ public class ConnectorDownloadManager {
             return "Some connectors were not downloaded: " + String.join(", ", failedDependencies);
         }
         return "Success";
+    }
+
+    private static List<String> handleOtherDependencies(String projectPath, List<DependencyDetails> dependencies) {
+
+        String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
+        File directory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI, Constant.DEPENDENCIES,
+                projectId).toFile();
+        File downloadDirectory = Path.of(directory.getAbsolutePath(), Constant.DOWNLOADED).toFile();
+        File extractDirectory = Path.of(directory.getAbsolutePath(), Constant.EXTRACTED).toFile();
+
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        if (!extractDirectory.exists()) {
+            extractDirectory.mkdirs();
+        }
+        if (!downloadDirectory.exists()) {
+            downloadDirectory.mkdirs();
+        }
+
+        // deleteRemovedOtherDependencies();
+        List<String> failedDependencies = new ArrayList<>();
+        for (DependencyDetails dependency : dependencies) {
+            try {
+                File dependencyFile = Path.of(downloadDirectory.getAbsolutePath(),
+                        dependency.getArtifact() + "-" + dependency.getVersion() + "." + dependency.getType()).toFile();
+
+                if (dependencyFile.exists() && dependencyFile.isFile()) {
+                    LOGGER.log(Level.INFO, "Dependency already downloaded: " + dependencyFile.getName());
+                } else {
+                    File existingArtifact = getDependencyFromLocalRepo(dependency.getGroupId(),
+                            dependency.getArtifact(), dependency.getVersion(), dependency.getType());
+                    if (existingArtifact != null) {
+                        LOGGER.log(Level.INFO, "Copying dependency from local repository: " + dependencyFile.getName());
+                        copyFile(existingArtifact, downloadDirectory);
+                    } else {
+                        LOGGER.log(Level.INFO, "Dependency not found in local repository: " + dependency.getArtifact());
+                    }
+                }
+            } catch (Exception e) {
+                String failedDependency = dependency.getGroupId() + "-" + dependency.getArtifact() + "-" + dependency.getVersion();
+                LOGGER.log(Level.WARNING, "Error occurred while downloading dependency " + failedDependency + ": " + e.getMessage());
+                failedDependencies.add(failedDependency);
+            }
+        }
+        return failedDependencies;
+    }
+
+    private static void deleteRemovedOtherDependencies(File downloadDirectory, List<DependencyDetails> dependencies,
+                                                String projectPath) {
+
+        List<String> existingOtherDependencies =
+                dependencies.stream().map(dependency -> dependency.getArtifact() + "-" + dependency.getVersion())
+                        .collect(Collectors.toList());
+        File[] files = downloadDirectory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (isConnectorRemoved(file, existingOtherDependencies)) {
+                try {
+                    Files.delete(file.toPath());
+                    removeFromProjectIfUsingOldCARPlugin(projectPath, file.getName());
+                } catch (IOException e) {
+                    LOGGER.log(Level.SEVERE, "Error occurred while deleting removed connector: " + file.getName());
+                }
+            }
+        }
     }
 
     private static void deleteRemovedConnectors(File downloadDirectory, List<DependencyDetails> dependencies,
@@ -138,12 +278,12 @@ public class ConnectorDownloadManager {
         return file.isFile() && !existingConnectors.contains(file.getName().replace(Constant.ZIP_EXTENSION, ""));
     }
 
-    private static File getDependencyFromLocalRepo(String groupId, String artifactId, String version) {
+    private static File getDependencyFromLocalRepo(String groupId, String artifactId, String version, String type) {
 
         String localMavenRepo = Path.of(System.getProperty(Constant.USER_HOME),  Constant.M2,
                 Constant.REPOSITORY).toString();
         String artifactPath = Path.of(localMavenRepo, groupId.replace(".", File.separator), artifactId,
-                version, artifactId + "-" + version + Constant.ZIP_EXTENSION).toString();
+                version, artifactId + "-" + version + "." + type).toString();
         File artifactFile = new File(artifactPath);
         if(artifactFile.exists()) {
             LOGGER.log(Level.INFO, "Dependency found in the local repository: " + artifactId);
