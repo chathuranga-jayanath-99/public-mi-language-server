@@ -522,6 +522,7 @@ public class Constant {
     public static final String NAMESPACES = "namespaces";
     public static final String CONNECTION_NAME = "connectionName";
     public static final String ZIP_EXTENSION = ".zip";
+    public static final String CAR_EXTENSION = ".car";
     public static final String JAR_EXTENSION = ".jar";
     public static final String ZIP_EXTENSION_NO_DOT = "zip";
     public static final String JAR_EXTENSION_NO_DOT = "jar";
