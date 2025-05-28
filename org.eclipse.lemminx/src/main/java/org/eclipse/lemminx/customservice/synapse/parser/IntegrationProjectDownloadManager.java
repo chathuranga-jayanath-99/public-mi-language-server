@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *     WSO2 LLC - support for WSO2 Micro Integrator Configuration
+ */
+
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import org.apache.commons.lang3.StringUtils;
@@ -27,6 +41,20 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 import static org.eclipse.lemminx.customservice.synapse.parser.DependencyManagerUtils.copyFile;
 import static org.eclipse.lemminx.customservice.synapse.parser.DependencyManagerUtils.getDependencyFromLocalRepo;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.ARTIFACT_ID;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.CAR_EXTENSION;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.DEPENDENCY;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.CAPP_DESCRIPTOR_FILE;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.DOWNLOADED;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.EXTRACTED;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.GROUP_ID_KEY;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.HYPHEN;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.INTEGRATION_PROJECT_DEPENDENCIES;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.TYPE;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.UNDERSCORE;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.USER_HOME;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.VERSION;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.WSO2_MI;
 
 public class IntegrationProjectDownloadManager {
 
@@ -34,11 +62,11 @@ public class IntegrationProjectDownloadManager {
 
     public static List<String> handleDependencies(String projectPath, List<DependencyDetails> dependencies) {
 
-        String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
-        File directory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI, Constant.DEPENDENCIES,
+        String projectId = new File(projectPath).getName() + UNDERSCORE + Utils.getHash(projectPath);
+        File directory = Path.of(System.getProperty(USER_HOME), WSO2_MI, INTEGRATION_PROJECT_DEPENDENCIES,
                 projectId).toFile();
-        File downloadDirectory = Path.of(directory.getAbsolutePath(), Constant.DOWNLOADED).toFile();
-        File extractDirectory = Path.of(directory.getAbsolutePath(), Constant.EXTRACTED).toFile();
+        File downloadDirectory = Path.of(directory.getAbsolutePath(), DOWNLOADED).toFile();
+        File extractDirectory = Path.of(directory.getAbsolutePath(), EXTRACTED).toFile();
 
         if (!directory.exists()) {
             directory.mkdirs();
@@ -57,7 +85,7 @@ public class IntegrationProjectDownloadManager {
             try {
                 fetchDependencyRecursively(dependency, downloadDirectory, fetchedDependencies);
             } catch (Exception e) {
-                String failedDependency = dependency.getGroupId() + "-" + dependency.getArtifact() + "-" + dependency.getVersion();
+                String failedDependency = dependency.getGroupId() + HYPHEN + dependency.getArtifact() + HYPHEN + dependency.getVersion();
                 LOGGER.log(Level.WARNING, "Error occurred while downloading dependency " + failedDependency + ": " + e.getMessage());
                 failedDependencies.add(failedDependency);
             }
@@ -67,7 +95,7 @@ public class IntegrationProjectDownloadManager {
 
     static void fetchDependencyRecursively(DependencyDetails dependency, File downloadDirectory,
                                            Set<String> fetchedDependencies) throws Exception {
-        String dependencyKey = dependency.getGroupId() + ":" + dependency.getArtifact() + ":" + dependency.getVersion();
+        String dependencyKey = dependency.getGroupId() + HYPHEN + dependency.getArtifact() + HYPHEN + dependency.getVersion();
         if (fetchedDependencies.contains(dependencyKey)) {
             return; // Skip already fetched dependencies
         }
@@ -90,7 +118,7 @@ public class IntegrationProjectDownloadManager {
     }
 
     private static File fetchDependencyFile(DependencyDetails dependency, File downloadDirectory) {
-        File dependencyFile = new File(downloadDirectory, dependency.getArtifact() + "-" + dependency.getVersion() + ".car");
+        File dependencyFile = new File(downloadDirectory, dependency.getArtifact() + HYPHEN + dependency.getVersion() + CAR_EXTENSION);
         if (dependencyFile.exists() && dependencyFile.isFile()) {
             LOGGER.log(Level.INFO, "Dependency already downloaded: " + dependencyFile.getName());
         } else {
@@ -101,7 +129,7 @@ public class IntegrationProjectDownloadManager {
                 try {
                     copyFile(existingArtifact, downloadDirectory);
                 } catch (IOException e) {
-                    String failedDependency = dependency.getGroupId() + "-" + dependency.getArtifact() + "-" + dependency.getVersion();
+                    String failedDependency = dependency.getGroupId() + HYPHEN + dependency.getArtifact() + HYPHEN + dependency.getVersion();
                     LOGGER.log(Level.WARNING, "Error occurred while downloading dependency " + failedDependency + ": " + e.getMessage());
                 }
             } else {
@@ -114,7 +142,7 @@ public class IntegrationProjectDownloadManager {
     private static List<DependencyDetails> parseDescriptorFile(File carFile) throws Exception {
         List<DependencyDetails> dependencies = new ArrayList<>();
         try (ZipFile zipFile = new ZipFile(carFile)) {
-            ZipEntry descriptorEntry = zipFile.getEntry("descriptor.xml");
+            ZipEntry descriptorEntry = zipFile.getEntry(CAPP_DESCRIPTOR_FILE);
             if (descriptorEntry == null) {
                 throw new Exception("descriptor.xml not found in .car file: " + carFile.getName());
             }
@@ -125,13 +153,13 @@ public class IntegrationProjectDownloadManager {
             Document document = builder.parse(inputStream);
             document.getDocumentElement().normalize();
 
-            NodeList dependencyNodes = document.getElementsByTagName("dependency");
+            NodeList dependencyNodes = document.getElementsByTagName(DEPENDENCY);
             for (int i = 0; i < dependencyNodes.getLength(); i++) {
                 Element dependencyElement = (Element) dependencyNodes.item(i);
-                String groupId = dependencyElement.getAttribute("groupId");
-                String artifactId = dependencyElement.getAttribute("artifactId");
-                String version = dependencyElement.getAttribute("version");
-                String type = dependencyElement.getAttribute("type");
+                String groupId = dependencyElement.getAttribute(GROUP_ID_KEY);
+                String artifactId = dependencyElement.getAttribute(ARTIFACT_ID);
+                String version = dependencyElement.getAttribute(VERSION);
+                String type = dependencyElement.getAttribute(TYPE);
 
                 if (StringUtils.isNotEmpty(groupId) && StringUtils.isNotEmpty(artifactId)
                         && StringUtils.isNotEmpty(version) && StringUtils.isNotEmpty(type)) {
@@ -151,7 +179,7 @@ public class IntegrationProjectDownloadManager {
                                                                     String projectPath) {
 
         List<String> existingDependencies =
-                dependencies.stream().map(dependency -> dependency.getArtifact() + "-" + dependency.getVersion())
+                dependencies.stream().map(dependency -> dependency.getArtifact() + HYPHEN + dependency.getVersion())
                         .collect(Collectors.toList());
         File[] files = downloadDirectory.listFiles();
         if (files == null) {

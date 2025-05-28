@@ -106,6 +106,7 @@ public class Constant {
     public static final String SERVER_PROFILE = "serverProfile";
     public static final String STREAM_CONFIG = "streamConfig";
     public static final String VERSION = "version";
+
     public static final String MESSAGE_BUILDER = "messageBuilder";
     public static final String CONTENT_TYPE = "contentType";
     public static final String FORMATTER_CLASS = "formatterClass";
@@ -406,10 +407,13 @@ public class Constant {
     public static final String FILE_PREFIX = "file://";
     public static final String EMPTY_STRING = "";
     public static final String POM = "pom.xml";
+    public static final String CAPP_DESCRIPTOR_FILE = "descriptor.xml";
     public static final String PARENT = "parent";
     public static final String PROJECT = "project";
     public static final String CONNECTOR = "connector";
     public static final String DOT = ".";
+    public static final String HYPHEN = "-";
+    public static final String UNDERSCORE = "_";
     public static final String XML = "xml";
     public static final String LOCAL_ENTRIES = "local-entries";
     public static final CharSequence GOV_REGISTRY_PREFIX = "gov:";
@@ -423,7 +427,6 @@ public class Constant {
     public static final String CALL_TEMPLATE = "call-template";
     public static final String STORE = "store";
     public static final String DEPENDENCY = "dependency";
-    public static final String DEPENDENCIES = "dependencies";
     public static final String COMPONENT = "component";
     public static final String INCLUDE = "include";
     public static final String KEY_EXPRESSION = "key-expression";
@@ -527,7 +530,7 @@ public class Constant {
     public static final String ZIP_EXTENSION_NO_DOT = "zip";
     public static final String JAR_EXTENSION_NO_DOT = "jar";
     public static final String CONNECTORS = "connectors";
-    public static final String INTEGRATION_PROJECT_DEPENDENCIES = "dependencies";
+    public static final String INTEGRATION_PROJECT_DEPENDENCIES = "integration-project-dependencies";
     public static final String USER_HOME = "user.home";
     public static final String MAIN = "main";
     public static final String WSO2MI = "wso2mi";
