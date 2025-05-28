@@ -19,9 +19,19 @@ import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.Resource;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.ResourceResponse;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.EXTRACTED;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.INTEGRATION_PROJECT_DEPENDENCIES;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.USER_HOME;
+import static org.eclipse.lemminx.customservice.synapse.utils.Constant.WSO2_MI;
+
+import static java.nio.file.Files.exists;
+import static java.nio.file.Files.isDirectory;
+import static java.nio.file.Files.list;
 
 public class NewProjectResourceFinder extends AbstractResourceFinder {
 
@@ -44,6 +54,22 @@ public class NewProjectResourceFinder extends AbstractResourceFinder {
         return response;
     }
 
+    /**
+    * This method searches for artifact resources and registry resources within the given project path without
+    * considering its dependencies.
+    *
+    * @param projectPath The path to the root project directory.
+    * @param types       A list of requested resource types to search for.
+    * @return A `ResourceResponse` containing the found resources.
+    */
+    private ResourceResponse findRootProjectResources(String projectPath, List<RequestedResource> types) {
+
+        ResourceResponse response = new ResourceResponse();
+        findArtifactResources(projectPath, types, response);
+        findRegistryResources(projectPath, types, response);
+        return response;
+    }
+
     private void findArtifactResources(String projectPath, List<RequestedResource> types, ResourceResponse response) {
 
         Path artifactsPath = Path.of(projectPath, "src", "main", "wso2mi", "artifacts");
@@ -59,6 +85,67 @@ public class NewProjectResourceFinder extends AbstractResourceFinder {
         Path registryPath = Path.of(projectPath, Constant.SRC, Constant.MAIN, Constant.WSO2MI, Constant.RESOURCES);
         List<Resource> resourcesInRegistry = findResourceInRegistry(registryPath, types);
         response.setRegistryResources(resourcesInRegistry);
+    }
+
+    @Override
+    public void loadDependentResources(String projectPath) {
+
+        initDependentResourcesMap();
+        String projectName = Path.of(projectPath).getFileName().toString();
+        Path dependenciesTempDir = Path.of(System.getProperty(USER_HOME), WSO2_MI, INTEGRATION_PROJECT_DEPENDENCIES);
+        try {
+            Path projectDependencyDir = findProjectDependencyDir(dependenciesTempDir, projectName);
+            if (projectDependencyDir != null) {
+                Path extractedDir = projectDependencyDir.resolve(EXTRACTED);
+                if (exists(extractedDir) && isDirectory(extractedDir)) {
+                    processDependentProjects(extractedDir);
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Error loading dependent resources", e);
+        }
+    }
+
+    /**
+     * Finds the dependency directory for the given project name.
+     *
+     * @param dependenciesTempDir The root directory for dependencies.
+     * @param projectName         The name of the project.
+     * @return The path to the dependency directory, or null if not found.
+     * @throws IOException If an error occurs while listing directories.
+     */
+    private Path findProjectDependencyDir(Path dependenciesTempDir, String projectName) throws IOException {
+        return list(dependenciesTempDir)
+                .filter(path -> path.getFileName().toString().startsWith(projectName) && isDirectory(path))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Processes all dependent projects within the extracted directory.
+     *
+     * @param extractedDir The directory containing extracted dependent projects.
+     * @throws IOException If an error occurs while listing directories.
+     */
+    private void processDependentProjects(Path extractedDir) throws IOException {
+        Map<String, ResourceResponse> dependentResourcesMap = getDependentResourcesMap();
+
+        for (Path dependentProject : list(extractedDir).toArray(Path[]::new)) {
+            if (isDirectory(dependentProject)) {
+                // Process each resource type for the dependent project
+                for (Map.Entry<String, ResourceResponse> entry : dependentResourcesMap.entrySet()) {
+                    String type = entry.getKey();
+                    ResourceResponse dependentResources = entry.getValue();
+
+                    // Create a requested resource for the current type
+                    RequestedResource requestedResource = new RequestedResource(type, true);
+
+                    // Find resources in the dependent project and merge them into the map
+                    ResourceResponse resources = findRootProjectResources(dependentProject.toString(), List.of(requestedResource));
+                    mergeResourceResponses(dependentResources, resources);
+                }
+            }
+        }
     }
 
     @Override

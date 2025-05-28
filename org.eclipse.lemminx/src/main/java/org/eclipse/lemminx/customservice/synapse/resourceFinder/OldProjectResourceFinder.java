@@ -63,6 +63,12 @@ public class OldProjectResourceFinder extends AbstractResourceFinder {
     }
 
     @Override
+    public void loadDependentResources(String projectPath) {
+        // No dependent resources to load for old projects
+        // This method is intentionally left empty as the old project structure does not support dependencies
+    }
+
+    @Override
     protected String getArtifactFolder(String type) {
 
         if (Constant.API.equalsIgnoreCase(type)) {

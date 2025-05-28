@@ -83,6 +83,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.pom.PomParser;
 import org.eclipse.lemminx.customservice.synapse.parser.ConnectorDownloadManager;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ArtifactFileScanner;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.NewProjectResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.RegistryFileScanner;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.BreakpointInfoResponse;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.BreakpointsRequest;
@@ -667,6 +668,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<String> loadDependentResources() {
+        if (resourceFinder instanceof NewProjectResourceFinder) {
+
+        }
         resourceFinder.loadDependentResources(projectUri);
         return CompletableFuture.supplyAsync(() -> "Dependent resources loaded successfully.");
     }

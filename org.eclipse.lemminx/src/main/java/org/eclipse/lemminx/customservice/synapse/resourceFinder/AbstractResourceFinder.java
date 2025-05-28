@@ -98,42 +98,6 @@ public abstract class AbstractResourceFinder {
         dependentResourcesMap.put("wsdl", new ResourceResponse());
     }
 
-    public void loadDependentResources(String projectPath) {
-
-        initDependentResourcesMap();
-        String projectName = Path.of(projectPath).getFileName().toString();
-        Path dependenciesTempDir = Path.of(System.getProperty("user.home"), ".wso2-mi", "dependencies");
-        Path projectDependencyDir = null;
-
-        try {
-            projectDependencyDir = java.nio.file.Files.list(dependenciesTempDir)
-                    .filter(path -> path.getFileName().toString().startsWith(projectName) && java.nio.file.Files.isDirectory(path))
-                    .findFirst()
-                    .orElse(null);
-            if (projectDependencyDir != null) {
-                Path extractedDir = projectDependencyDir.resolve("Extracted");
-                if (java.nio.file.Files.exists(extractedDir) && java.nio.file.Files.isDirectory(extractedDir)) {
-                    Map<String, ResourceResponse> dependentResourcesMap = getDependentResourcesMap();
-                    for (Path dependentProject : java.nio.file.Files.list(extractedDir).toArray(Path[]::new)) {
-                        if (java.nio.file.Files.isDirectory(dependentProject)) {
-                            for (Map.Entry<String, ResourceResponse> entry : dependentResourcesMap.entrySet()) {
-                                String type = entry.getKey();
-                                ResourceResponse dependentResources = entry.getValue();
-
-                                RequestedResource requestedResource = new RequestedResource(type, true);
-                                ResourceResponse resources =
-                                        findResources(dependentProject.toString(), List.of(requestedResource));
-                                mergeResourceResponses(dependentResources, resources);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public Map<String, ResourceResponse> getDependentResourcesMap() {
 
         return dependentResourcesMap;
@@ -187,6 +151,8 @@ public abstract class AbstractResourceFinder {
     }
 
     protected abstract ResourceResponse findResources(String projectPath, List<RequestedResource> type);
+
+    public abstract void loadDependentResources(String projectPath);
 
     protected List<Resource> findResourceInArtifacts(Path artifactsPath, List<RequestedResource> types) {
 
